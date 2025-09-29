@@ -225,3 +225,4 @@ router.get('/fcm/tokens', verifyFirebaseIdToken, async (req, res) => {
 });
 
 module.exports = router;
+

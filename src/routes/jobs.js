@@ -301,3 +301,4 @@ router.delete('/:id', verifyFirebaseIdToken, requireRecruiter, async (req, res) 
 });
 
 module.exports = router;
+

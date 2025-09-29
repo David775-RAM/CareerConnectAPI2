@@ -342,3 +342,4 @@ router.patch('/:id/status', verifyFirebaseIdToken, requireRecruiter, async (req,
 });
 
 module.exports = router;
+
