@@ -8,7 +8,7 @@ const router = express.Router();
 // Validation schemas
 const fcmTokenSchema = z.object({
   fcm_token: z.string().min(1),
-  device_id: z.string().optional(),
+  device_id: z.string().min(1),
   device_type: z.enum(['android', 'ios', 'web']).default('android'),
 });
 
@@ -162,7 +162,7 @@ router.post('/fcm/tokens', verifyFirebaseIdToken, async (req, res) => {
     const { data, error } = await supabase
       .from('user_fcm_tokens')
       .upsert(tokenData, { 
-        onConflict: 'user_uid,fcm_token',
+        onConflict: 'user_uid,device_id',
         ignoreDuplicates: false 
       })
       .select()
@@ -170,7 +170,12 @@ router.post('/fcm/tokens', verifyFirebaseIdToken, async (req, res) => {
 
     if (error) throw error;
 
-    return res.status(201).json(data);
+    console.log('FCM token registered/updated', {
+      user_uid: tokenData.user_uid,
+      device_id: tokenData.device_id,
+    });
+
+    return res.status(200).json({ ok: true });
   } catch (error) {
     console.error('Error registering FCM token:', error);
     return res.status(500).json({ error: 'Internal server error' });
@@ -198,7 +203,12 @@ router.delete('/fcm/tokens/:token', verifyFirebaseIdToken, async (req, res) => {
       throw error;
     }
 
-    return res.json(data);
+    console.log('FCM token deactivated', {
+      user_uid: req.user.firebaseUid,
+      fcm_token: req.params.token,
+    });
+
+    return res.json({ ok: true });
   } catch (error) {
     console.error('Error deactivating FCM token:', error);
     return res.status(500).json({ error: 'Internal server error' });

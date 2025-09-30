@@ -67,13 +67,17 @@ class NotificationService {
     const { data, error } = await supabase
       .from('user_fcm_tokens')
       .upsert(tokenDataWithUser, { 
-        onConflict: 'user_uid,fcm_token',
+        onConflict: 'user_uid,device_id',
         ignoreDuplicates: false 
       })
       .select()
       .single();
 
     if (error) throw error;
+    console.log('FCM token registered/updated (service)', {
+      user_uid: userUid,
+      device_id: tokenData.device_id,
+    });
     return data;
   }
 
@@ -100,6 +104,10 @@ class NotificationService {
       .eq('fcm_token', fcmToken);
 
     if (error) throw error;
+    console.log('FCM token deactivated (service)', {
+      user_uid: userUid,
+      fcm_token: fcmToken,
+    });
   }
 
   static async createNotification(notificationData) {
