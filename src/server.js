@@ -32,6 +32,7 @@ app.get('/', (req, res) => {
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
 	console.log(`CareerConnect API listening on port ${port}`);
+	console.log('Version 1.0.2 - Fixed axios dependency issue');
 });
 
 
