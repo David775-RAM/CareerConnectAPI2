@@ -391,5 +391,27 @@ router.patch('/:id/status', verifyFirebaseIdToken, requireRecruiter, async (req,
   }
 });
 
+// Test FCM notification endpoint (for debugging)
+router.post('/test-fcm/:userUid', verifyFirebaseIdToken, async (req, res) => {
+  try {
+    const { userUid } = req.params;
+    console.log(`🧪 Testing FCM notification for user: ${userUid}`);
+
+    await NotificationService.sendFCMNotification(userUid, {
+      title: 'Test Notification',
+      body: 'This is a test FCM notification to verify push notifications are working.',
+      data: {
+        type: 'test',
+        test_id: '12345',
+      },
+    });
+
+    res.json({ success: true, message: 'Test FCM notification sent' });
+  } catch (error) {
+    console.error('Error sending test FCM notification:', error);
+    res.status(500).json({ error: 'Failed to send test notification', details: error.message });
+  }
+});
+
 module.exports = router;
 
