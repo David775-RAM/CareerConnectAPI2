@@ -12,7 +12,8 @@ app.use(cors({
     'http://localhost:3000',        // Local development
     'http://localhost:8080',        // Android emulator
     'http://10.0.2.2:3000',        // Android emulator localhost
-    'https://careerconnectapi-production.up.railway.app', // Your hosted API
+    'https://careerconnectapi2.onrender.com',
+    //'https://careerconnectapi-production.up.railway.app', // Your hosted API
     // Add your Android app's domain when you have it
   ],
   credentials: true,
