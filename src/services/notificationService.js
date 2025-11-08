@@ -190,13 +190,20 @@ class NotificationService {
       };
 
       // Send the message using Firebase Admin SDK
+      console.log(`🔥 Sending FCM notification to user ${userUid} with ${fcmTokens.length} tokens`);
+      console.log(`📱 FCM message:`, JSON.stringify(message, null, 2));
+
       const response = await admin.messaging().sendMulticast(message);
 
-      console.log(`FCM notification sent to user ${userUid}:`, {
+      console.log(`✅ FCM notification result for user ${userUid}:`, {
         successCount: response.successCount,
         failureCount: response.failureCount,
         totalTokens: fcmTokens.length,
       });
+
+      if (response.failureCount > 0) {
+        console.log(`❌ FCM failures:`, response.responses.filter(r => !r.success).map(r => r.error));
+      }
 
       // Handle failed tokens (could be expired or invalid)
       if (response.failureCount > 0) {

@@ -366,6 +366,7 @@ router.patch('/:id/status', verifyFirebaseIdToken, requireRecruiter, async (req,
       });
 
     // Send FCM push notification to job seeker
+    console.log(`🚀 Sending FCM notification to job seeker ${application.applicant_uid} for status update: ${validation.data.status}`);
     try {
       await NotificationService.sendFCMNotification(application.applicant_uid, {
         title: notificationTitle,
@@ -378,9 +379,9 @@ router.patch('/:id/status', verifyFirebaseIdToken, requireRecruiter, async (req,
           status: validation.data.status,
         },
       });
+      console.log(`✅ FCM notification sent successfully to job seeker ${application.applicant_uid}`);
     } catch (fcmError) {
-      // Log FCM error but don't fail the status update
-      console.error('Failed to send FCM notification for application status update:', fcmError);
+      console.error(`❌ Failed to send FCM notification for application status update to ${application.applicant_uid}:`, fcmError);
     }
 
     return res.json(data);
