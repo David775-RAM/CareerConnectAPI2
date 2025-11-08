@@ -12,6 +12,11 @@ if (privateKey && privateKey.includes('\\n')) {
 let firebaseInitialized = false;
 if (projectId && clientEmail && privateKey) {
 	try {
+		console.log('🔍 Initializing Firebase with:');
+		console.log('  Project ID:', projectId);
+		console.log('  Client Email:', clientEmail.substring(0, 20) + '...');
+		console.log('  Private Key Length:', privateKey.length);
+
 		if (!admin.apps.length) {
 			admin.initializeApp({
 				credential: admin.credential.cert({
@@ -23,12 +28,21 @@ if (projectId && clientEmail && privateKey) {
 		}
 		firebaseInitialized = true;
 		console.log('✅ Firebase Admin initialized successfully');
+
+		// Test token verification
+		console.log('🔍 Testing Firebase token verification...');
+
 	} catch (error) {
 		console.error('❌ Failed to initialize Firebase Admin:', error.message);
-		console.log('🔶 Server will run without Firebase notifications');
+		console.error('❌ Error details:', error);
+		console.log('🔶 Server will run without Firebase authentication');
 	}
 } else {
-	console.log('🔶 Firebase environment variables not found. Server will run without Firebase notifications');
+	console.log('🔶 Firebase environment variables not found. Missing:');
+	console.log('  Project ID:', !!projectId);
+	console.log('  Client Email:', !!clientEmail);
+	console.log('  Private Key:', !!privateKey);
+	console.log('🔶 Server will run without Firebase authentication');
 }
 
 // Export a flag to check if Firebase is available
