@@ -1,4 +1,5 @@
 const { supabase } = require('../lib/supabase');
+const { admin, isInitialized } = require('../lib/firebase');
 
 class NotificationService {
   static async getNotifications(userUid, page = 1, limit = 20) {
@@ -130,6 +131,113 @@ class NotificationService {
 
     if (error) throw error;
     return data?.map(token => token.fcm_token) || [];
+  }
+
+  /**
+   * Send FCM push notification to a user
+   * @param {string} userUid - User ID to send notification to
+   * @param {Object} notificationData - Notification data
+   * @param {string} notificationData.title - Notification title
+   * @param {string} notificationData.body - Notification body
+   * @param {Object} notificationData.data - Additional data payload
+   */
+  static async sendFCMNotification(userUid, notificationData) {
+    try {
+      // Check if Firebase is initialized
+      if (!isInitialized || !admin) {
+        console.log('🔶 Firebase not initialized - skipping FCM notification');
+        return { success: false, message: 'Firebase not initialized' };
+      }
+
+      // Get active FCM tokens for the user
+      const fcmTokens = await this.getActiveFCMTokensForUser(userUid);
+
+      if (!fcmTokens || fcmTokens.length === 0) {
+        console.log(`No active FCM tokens found for user ${userUid}`);
+        return { success: false, message: 'No active FCM tokens found' };
+      }
+
+      // Prepare the FCM message
+      const message = {
+        tokens: fcmTokens, // Send to multiple tokens
+        notification: {
+          title: notificationData.title,
+          body: notificationData.body,
+        },
+        data: {
+          type: notificationData.data?.type || 'general',
+          title: notificationData.title,
+          body: notificationData.body,
+          ...notificationData.data, // Include additional data
+        },
+        android: {
+          priority: 'high',
+          notification: {
+            channelId: 'career_connect_notifications',
+            priority: 'high',
+            defaultSound: true,
+            defaultVibrateTimings: true,
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: 'default',
+              badge: 1,
+            },
+          },
+        },
+      };
+
+      // Send the message using Firebase Admin SDK
+      const response = await admin.messaging().sendMulticast(message);
+
+      console.log(`FCM notification sent to user ${userUid}:`, {
+        successCount: response.successCount,
+        failureCount: response.failureCount,
+        totalTokens: fcmTokens.length,
+      });
+
+      // Handle failed tokens (could be expired or invalid)
+      if (response.failureCount > 0) {
+        const failedTokens = [];
+        response.responses.forEach((resp, idx) => {
+          if (!resp.success) {
+            console.log(`FCM token failed: ${fcmTokens[idx]}, Error: ${resp.error}`);
+            failedTokens.push(fcmTokens[idx]);
+          }
+        });
+
+        // Optionally deactivate failed tokens
+        if (failedTokens.length > 0) {
+          await this.deactivateFailedTokens(userUid, failedTokens);
+        }
+      }
+
+      return {
+        success: response.successCount > 0,
+        successCount: response.successCount,
+        failureCount: response.failureCount,
+        totalTokens: fcmTokens.length,
+      };
+    } catch (error) {
+      console.error('Error sending FCM notification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Deactivate FCM tokens that failed to receive notifications
+   */
+  static async deactivateFailedTokens(userUid, failedTokens) {
+    try {
+      for (const token of failedTokens) {
+        await this.deactivateFCMToken(userUid, token);
+      }
+      console.log(`Deactivated ${failedTokens.length} failed FCM tokens for user ${userUid}`);
+    } catch (error) {
+      console.error('Error deactivating failed FCM tokens:', error);
+    }
   }
 }
 

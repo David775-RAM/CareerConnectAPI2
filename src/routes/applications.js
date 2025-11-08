@@ -2,6 +2,7 @@ const express = require('express');
 const { supabase } = require('../lib/supabase');
 const { verifyFirebaseIdToken } = require('../middleware/auth');
 const { z } = require('zod');
+const { NotificationService } = require('../services/notificationService');
 
 const router = express.Router();
 
@@ -13,7 +14,7 @@ const createApplicationSchema = z.object({
 });
 
 const updateApplicationStatusSchema = z.object({
-  status: z.enum(['pending', 'reviewed', 'accepted', 'rejected']),
+  status: z.enum(['pending', 'under_review', 'reviewed', 'shortlisted', 'interview_scheduled', 'accepted', 'rejected', 'withdrawn']),
 });
 
 // Middleware to check if user is job seeker
@@ -195,6 +196,23 @@ router.post('/', verifyFirebaseIdToken, requireJobSeeker, async (req, res) => {
         related_application_id: data.id,
       });
 
+    // Send FCM push notification to recruiter
+    try {
+      await NotificationService.sendFCMNotification(job.recruiter_uid, {
+        title: 'New Job Application',
+        body: `A new application has been submitted for: ${job.title}`,
+        data: {
+          type: 'new_application',
+          job_id: validation.data.job_id,
+          application_id: data.id,
+          job_title: job.title,
+        },
+      });
+    } catch (fcmError) {
+      // Log FCM error but don't fail the application submission
+      console.error('Failed to send FCM notification for new application:', fcmError);
+    }
+
     return res.status(201).json(data);
   } catch (error) {
     console.error('Error creating application:', error);
@@ -306,9 +324,18 @@ router.patch('/:id/status', verifyFirebaseIdToken, requireRecruiter, async (req,
     // Create notification for job seeker
     let notificationTitle, notificationMessage;
     switch (validation.data.status) {
+      case 'under_review':
       case 'reviewed':
-        notificationTitle = 'Application Reviewed';
-        notificationMessage = `Your application for ${application.job_postings.title} has been reviewed.`;
+        notificationTitle = 'Application Under Review';
+        notificationMessage = `Your application for ${application.job_postings.title} is now under review.`;
+        break;
+      case 'shortlisted':
+        notificationTitle = 'Application Shortlisted!';
+        notificationMessage = `Great news! Your application for ${application.job_postings.title} has been shortlisted.`;
+        break;
+      case 'interview_scheduled':
+        notificationTitle = 'Interview Scheduled';
+        notificationMessage = `Congratulations! An interview has been scheduled for ${application.job_postings.title}.`;
         break;
       case 'accepted':
         notificationTitle = 'Application Accepted!';
@@ -317,6 +344,10 @@ router.patch('/:id/status', verifyFirebaseIdToken, requireRecruiter, async (req,
       case 'rejected':
         notificationTitle = 'Application Update';
         notificationMessage = `Your application for ${application.job_postings.title} was not selected this time.`;
+        break;
+      case 'withdrawn':
+        notificationTitle = 'Application Withdrawn';
+        notificationMessage = `Your application for ${application.job_postings.title} has been withdrawn.`;
         break;
       default:
         notificationTitle = 'Application Update';
@@ -333,6 +364,24 @@ router.patch('/:id/status', verifyFirebaseIdToken, requireRecruiter, async (req,
         related_job_id: application.job_postings.id,
         related_application_id: application.id,
       });
+
+    // Send FCM push notification to job seeker
+    try {
+      await NotificationService.sendFCMNotification(application.applicant_uid, {
+        title: notificationTitle,
+        body: notificationMessage,
+        data: {
+          type: 'application_update',
+          job_id: application.job_postings.id,
+          application_id: application.id,
+          job_title: application.job_postings.title,
+          status: validation.data.status,
+        },
+      });
+    } catch (fcmError) {
+      // Log FCM error but don't fail the status update
+      console.error('Failed to send FCM notification for application status update:', fcmError);
+    }
 
     return res.json(data);
   } catch (error) {
