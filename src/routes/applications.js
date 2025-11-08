@@ -397,6 +397,23 @@ router.post('/test-fcm/:userUid', verifyFirebaseIdToken, async (req, res) => {
     const { userUid } = req.params;
     console.log(`🧪 Testing FCM notification for user: ${userUid}`);
 
+    // First check if we can access Firebase Admin SDK
+    const { admin, isInitialized } = require('../lib/firebase');
+    console.log(`🔥 Firebase initialized: ${isInitialized}, admin exists: ${!!admin}`);
+
+    if (!isInitialized || !admin) {
+      return res.status(500).json({ error: 'Firebase not initialized', firebaseInitialized: isInitialized, adminExists: !!admin });
+    }
+
+    // Try to get FCM tokens
+    const fcmTokens = await NotificationService.getActiveFCMTokensForUser(userUid);
+    console.log(`📱 Retrieved ${fcmTokens.length} tokens for user ${userUid}`);
+
+    if (!fcmTokens || fcmTokens.length === 0) {
+      return res.status(400).json({ error: 'No FCM tokens found for user', userUid, tokensFound: 0 });
+    }
+
+    // Now try to send the notification
     await NotificationService.sendFCMNotification(userUid, {
       title: 'Test Notification',
       body: 'This is a test FCM notification to verify push notifications are working.',
@@ -406,10 +423,14 @@ router.post('/test-fcm/:userUid', verifyFirebaseIdToken, async (req, res) => {
       },
     });
 
-    res.json({ success: true, message: 'Test FCM notification sent' });
+    res.json({ success: true, message: 'Test FCM notification sent', tokensFound: fcmTokens.length });
   } catch (error) {
     console.error('Error sending test FCM notification:', error);
-    res.status(500).json({ error: 'Failed to send test notification', details: error.message });
+    res.status(500).json({
+      error: 'Failed to send test notification',
+      details: error.message,
+      stack: error.stack?.split('\n').slice(0, 5) // First 5 lines of stack trace
+    });
   }
 });
 
