@@ -161,18 +161,30 @@ class NotificationService {
       }
 
       // Prepare the FCM message
+      // Convert all data values to strings (FCM requirement)
+      const dataPayload = {
+        type: String(notificationData.data?.type || 'general'),
+        title: String(notificationData.title || ''),
+        body: String(notificationData.body || ''),
+      };
+      
+      // Add additional data fields, ensuring all values are strings
+      if (notificationData.data) {
+        Object.keys(notificationData.data).forEach(key => {
+          if (key !== 'type') { // Already added above
+            const value = notificationData.data[key];
+            dataPayload[key] = value !== null && value !== undefined ? String(value) : '';
+          }
+        });
+      }
+
       const message = {
         tokens: fcmTokens, // Send to multiple tokens
         notification: {
           title: notificationData.title,
           body: notificationData.body,
         },
-        data: {
-          type: notificationData.data?.type || 'general',
-          title: notificationData.title,
-          body: notificationData.body,
-          ...notificationData.data, // Include additional data
-        },
+        data: dataPayload,
         android: {
           priority: 'high',
           notification: {
@@ -180,6 +192,7 @@ class NotificationService {
             priority: 'high',
             defaultSound: true,
             defaultVibrateTimings: true,
+            clickAction: 'FLUTTER_NOTIFICATION_CLICK', // For deep linking
           },
         },
         apns: {
