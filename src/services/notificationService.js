@@ -143,6 +143,7 @@ class NotificationService {
    */
   static async sendFCMNotification(userUid, notificationData) {
     try {
+      console.log(`🔔 Starting FCM notification send to user: ${userUid}`);
       // Check if Firebase is initialized
       if (!isInitialized || !admin) {
         console.log('🔶 Firebase not initialized - skipping FCM notification');
@@ -150,7 +151,9 @@ class NotificationService {
       }
 
       // Get active FCM tokens for the user
+      console.log(`🔍 Retrieving FCM tokens for user: ${userUid}`);
       const fcmTokens = await this.getActiveFCMTokensForUser(userUid);
+      console.log(`📱 Found ${fcmTokens.length} FCM tokens for user ${userUid}`);
 
       if (!fcmTokens || fcmTokens.length === 0) {
         console.log(`No active FCM tokens found for user ${userUid}`);
