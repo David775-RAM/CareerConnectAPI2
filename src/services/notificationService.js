@@ -240,7 +240,13 @@ class NotificationService {
       console.log(`📱 FCM message:`, JSON.stringify(message, null, 2));
 
       // Check if sendMulticast is available (Firebase Admin SDK v8.0.0+)
-      const messaging = admin.messaging();
+      let messaging;
+      try {
+        messaging = admin.messaging();
+      } catch (error) {
+        console.error('❌ [FCM NOTIFICATION] Error getting Firebase Messaging service:', error.message);
+        return { success: false, message: 'Firebase Messaging service error' };
+      }
 
       // Verify messaging is available
       if (!messaging) {
@@ -252,7 +258,6 @@ class NotificationService {
       console.log(`📦 [FCM NOTIFICATION] sendMulticast available: ${typeof messaging.sendMulticast}`);
       console.log(`📦 [FCM NOTIFICATION] send available: ${typeof messaging.send}`);
 
-      let response;
       let successCount = 0;
       let failureCount = 0;
       const failedTokens = [];
@@ -260,31 +265,41 @@ class NotificationService {
       if (typeof messaging.sendMulticast === 'function') {
         // Use sendMulticast for multiple tokens (preferred method)
         console.log(`📤 Using sendMulticast for ${fcmTokens.length} tokens`);
-        response = await messaging.sendMulticast(message);
+        try {
+          const response = await messaging.sendMulticast(message);
 
-        successCount = response.successCount;
-        failureCount = response.failureCount;
+          successCount = response.successCount || 0;
+          failureCount = response.failureCount || 0;
 
-        console.log(`✅ FCM notification result for user ${userUid}:`, {
-          successCount: response.successCount,
-          failureCount: response.failureCount,
-          totalTokens: fcmTokens.length,
-        });
-
-        if (response.failureCount > 0) {
-          console.log(`❌ FCM failures:`, response.responses.filter(r => !r.success).map(r => r.error));
-          response.responses.forEach((resp, idx) => {
-            if (!resp.success) {
-              console.log(`FCM token failed: ${fcmTokens[idx]}, Error: ${resp.error}`);
-              failedTokens.push(fcmTokens[idx]);
-            }
+          console.log(`✅ FCM notification result for user ${userUid}:`, {
+            successCount: response.successCount,
+            failureCount: response.failureCount,
+            totalTokens: fcmTokens.length,
           });
+
+          if (response.failureCount > 0 && response.responses) {
+            console.log(`❌ FCM failures:`, response.responses.filter(r => !r.success).map(r => r.error));
+            response.responses.forEach((resp, idx) => {
+              if (!resp.success) {
+                console.log(`FCM token failed: ${fcmTokens[idx]}, Error: ${resp.error}`);
+                failedTokens.push(fcmTokens[idx]);
+              }
+            });
+          }
+        } catch (sendError) {
+          console.error(`❌ [FCM NOTIFICATION] Error with sendMulticast:`, sendError.message);
+          console.log(`📤 Falling back to individual send method`);
+          // Fall back to individual send method
+          await sendIndividualMessages();
         }
       } else {
         // Fallback: Use send for each token individually (for older SDK versions)
         console.log(`📤 sendMulticast not available, using send for each token individually`);
         console.log(`⚠️  Consider updating firebase-admin to v8.0.0+ for better performance`);
+        await sendIndividualMessages();
+      }
 
+      async function sendIndividualMessages() {
         const sendPromises = fcmTokens.map(async (token, index) => {
           try {
             const singleMessage = {
