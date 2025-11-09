@@ -239,38 +239,93 @@ class NotificationService {
       console.log(`🔥 Sending FCM notification to user ${userUid} with ${fcmTokens.length} tokens`);
       console.log(`📱 FCM message:`, JSON.stringify(message, null, 2));
 
-      const response = await admin.messaging().sendMulticast(message);
+      // Check if sendMulticast is available (Firebase Admin SDK v8.0.0+)
+      const messaging = admin.messaging();
 
-      console.log(`✅ FCM notification result for user ${userUid}:`, {
-        successCount: response.successCount,
-        failureCount: response.failureCount,
-        totalTokens: fcmTokens.length,
-      });
-
-      if (response.failureCount > 0) {
-        console.log(`❌ FCM failures:`, response.responses.filter(r => !r.success).map(r => r.error));
+      // Verify messaging is available
+      if (!messaging) {
+        console.error('❌ [FCM NOTIFICATION] Firebase Messaging is not available');
+        return { success: false, message: 'Firebase Messaging not available' };
       }
 
-      // Handle failed tokens (could be expired or invalid)
-      if (response.failureCount > 0) {
-        const failedTokens = [];
-        response.responses.forEach((resp, idx) => {
-          if (!resp.success) {
-            console.log(`FCM token failed: ${fcmTokens[idx]}, Error: ${resp.error}`);
-            failedTokens.push(fcmTokens[idx]);
+      console.log(`📦 [FCM NOTIFICATION] Firebase Admin SDK version check - messaging object type: ${typeof messaging}`);
+      console.log(`📦 [FCM NOTIFICATION] sendMulticast available: ${typeof messaging.sendMulticast}`);
+      console.log(`📦 [FCM NOTIFICATION] send available: ${typeof messaging.send}`);
+
+      let response;
+      let successCount = 0;
+      let failureCount = 0;
+      const failedTokens = [];
+
+      if (typeof messaging.sendMulticast === 'function') {
+        // Use sendMulticast for multiple tokens (preferred method)
+        console.log(`📤 Using sendMulticast for ${fcmTokens.length} tokens`);
+        response = await messaging.sendMulticast(message);
+
+        successCount = response.successCount;
+        failureCount = response.failureCount;
+
+        console.log(`✅ FCM notification result for user ${userUid}:`, {
+          successCount: response.successCount,
+          failureCount: response.failureCount,
+          totalTokens: fcmTokens.length,
+        });
+
+        if (response.failureCount > 0) {
+          console.log(`❌ FCM failures:`, response.responses.filter(r => !r.success).map(r => r.error));
+          response.responses.forEach((resp, idx) => {
+            if (!resp.success) {
+              console.log(`FCM token failed: ${fcmTokens[idx]}, Error: ${resp.error}`);
+              failedTokens.push(fcmTokens[idx]);
+            }
+          });
+        }
+      } else {
+        // Fallback: Use send for each token individually (for older SDK versions)
+        console.log(`📤 sendMulticast not available, using send for each token individually`);
+        console.log(`⚠️  Consider updating firebase-admin to v8.0.0+ for better performance`);
+
+        const sendPromises = fcmTokens.map(async (token, index) => {
+          try {
+            const singleMessage = {
+              token: token,
+              notification: message.notification,
+              data: message.data,
+              android: message.android,
+              apns: message.apns,
+            };
+
+            await messaging.send(singleMessage);
+            successCount++;
+            console.log(`✅ Successfully sent to token ${index + 1}/${fcmTokens.length}`);
+            return { success: true, token };
+          } catch (error) {
+            failureCount++;
+            console.error(`❌ Failed to send to token ${index + 1}/${fcmTokens.length}:`, error.message);
+            failedTokens.push(token);
+            return { success: false, token, error };
           }
         });
 
-        // Optionally deactivate failed tokens
-        if (failedTokens.length > 0) {
-          await this.deactivateFailedTokens(userUid, failedTokens);
-        }
+        await Promise.allSettled(sendPromises);
+
+        console.log(`✅ FCM notification result for user ${userUid}:`, {
+          successCount: successCount,
+          failureCount: failureCount,
+          totalTokens: fcmTokens.length,
+        });
+      }
+
+      // Handle failed tokens (could be expired or invalid)
+      if (failedTokens.length > 0) {
+        console.log(`⚠️  ${failedTokens.length} token(s) failed. Attempting to deactivate...`);
+        await this.deactivateFailedTokens(userUid, failedTokens);
       }
 
       return {
-        success: response.successCount > 0,
-        successCount: response.successCount,
-        failureCount: response.failureCount,
+        success: successCount > 0,
+        successCount: successCount,
+        failureCount: failureCount,
         totalTokens: fcmTokens.length,
       };
     } catch (error) {
