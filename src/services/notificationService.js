@@ -192,7 +192,7 @@ class NotificationService {
             priority: 'high',
             defaultSound: true,
             defaultVibrateTimings: true,
-            clickAction: 'FLUTTER_NOTIFICATION_CLICK', // For deep linking
+            // Click action is handled by Android service via PendingIntent
           },
         },
         apns: {

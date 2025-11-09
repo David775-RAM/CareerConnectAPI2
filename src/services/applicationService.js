@@ -1,4 +1,5 @@
 const { supabase } = require('../lib/supabase');
+const { NotificationService } = require('./notificationService');
 
 class ApplicationService {
   static async createApplication(applicantUid, applicationData) {
@@ -203,9 +204,18 @@ class ApplicationService {
     // Create notification for job seeker
     let notificationTitle, notificationMessage;
     switch (statusData.status) {
+      case 'under_review':
       case 'reviewed':
-        notificationTitle = 'Application Reviewed';
-        notificationMessage = `Your application for ${application.job_postings.title} has been reviewed.`;
+        notificationTitle = 'Application Under Review';
+        notificationMessage = `Your application for ${application.job_postings.title} is now under review.`;
+        break;
+      case 'shortlisted':
+        notificationTitle = 'Application Shortlisted!';
+        notificationMessage = `Great news! Your application for ${application.job_postings.title} has been shortlisted.`;
+        break;
+      case 'interview_scheduled':
+        notificationTitle = 'Interview Scheduled';
+        notificationMessage = `Congratulations! An interview has been scheduled for ${application.job_postings.title}.`;
         break;
       case 'accepted':
         notificationTitle = 'Application Accepted!';
@@ -215,11 +225,16 @@ class ApplicationService {
         notificationTitle = 'Application Update';
         notificationMessage = `Your application for ${application.job_postings.title} was not selected this time.`;
         break;
+      case 'withdrawn':
+        notificationTitle = 'Application Withdrawn';
+        notificationMessage = `Your application for ${application.job_postings.title} has been withdrawn.`;
+        break;
       default:
         notificationTitle = 'Application Update';
         notificationMessage = `Your application for ${application.job_postings.title} has been updated.`;
     }
 
+    // Create database notification
     await supabase
       .from('notifications')
       .insert({
@@ -230,6 +245,25 @@ class ApplicationService {
         related_job_id: application.job_postings.id,
         related_application_id: applicationId,
       });
+
+    // Send FCM push notification to job seeker
+    try {
+      await NotificationService.sendFCMNotification(application.applicant_uid, {
+        title: notificationTitle,
+        body: notificationMessage,
+        data: {
+          type: 'application_update',
+          job_id: application.job_postings.id,
+          application_id: applicationId,
+          job_title: application.job_postings.title,
+          status: statusData.status,
+        },
+      });
+      console.log(`✅ FCM notification sent successfully to job seeker ${application.applicant_uid} for status: ${statusData.status}`);
+    } catch (fcmError) {
+      // Log FCM error but don't fail the status update
+      console.error(`❌ Failed to send FCM notification for application status update to ${application.applicant_uid}:`, fcmError);
+    }
 
     return data;
   }
