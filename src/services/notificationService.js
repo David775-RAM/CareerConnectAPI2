@@ -123,14 +123,37 @@ class NotificationService {
   }
 
   static async getActiveFCMTokensForUser(userUid) {
+    console.log(`🔍 [FCM TOKEN LOOKUP] Looking up FCM tokens for user: ${userUid}`);
+    
     const { data, error } = await supabase
       .from('user_fcm_tokens')
-      .select('fcm_token')
+      .select('fcm_token, device_id, device_type, is_active, created_at')
       .eq('user_uid', userUid)
       .eq('is_active', true);
 
-    if (error) throw error;
-    return data?.map(token => token.fcm_token) || [];
+    if (error) {
+      console.error(`❌ [FCM TOKEN LOOKUP] Database error retrieving tokens for user ${userUid}:`, error);
+      throw error;
+    }
+    
+    const tokens = data?.map(token => token.fcm_token) || [];
+    console.log(`📱 [FCM TOKEN LOOKUP] Found ${tokens.length} active token(s) for user ${userUid}`);
+    
+    if (data && data.length > 0) {
+      console.log(`   Token details:`, data.map(t => ({
+        device_id: t.device_id,
+        device_type: t.device_type,
+        token_prefix: t.fcm_token?.substring(0, 20) + '...'
+      })));
+    } else {
+      console.log(`   ⚠️  No active FCM tokens found in database for user ${userUid}`);
+      console.log(`   This could mean:`);
+      console.log(`   - User hasn't registered FCM token yet`);
+      console.log(`   - Token was deactivated`);
+      console.log(`   - User UID mismatch between registration and lookup`);
+    }
+    
+    return tokens;
   }
 
   /**
@@ -143,12 +166,19 @@ class NotificationService {
    */
   static async sendFCMNotification(userUid, notificationData) {
     try {
-      console.log(`🔔 Starting FCM notification send to user: ${userUid}`);
+      console.log(`🔔 [FCM NOTIFICATION] Starting FCM notification send to user: ${userUid}`);
+      console.log(`   Notification type: ${notificationData.data?.type || 'general'}`);
+      console.log(`   Title: ${notificationData.title}`);
+      
       // Check if Firebase is initialized
       if (!isInitialized || !admin) {
-        console.log('🔶 Firebase not initialized - skipping FCM notification');
+        console.error('❌ [FCM NOTIFICATION] Firebase Admin SDK not initialized - skipping FCM notification');
+        console.error(`   isInitialized: ${isInitialized}, admin exists: ${!!admin}`);
+        console.error(`   This means FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, or FIREBASE_PRIVATE_KEY may be missing or invalid`);
         return { success: false, message: 'Firebase not initialized' };
       }
+      
+      console.log(`✅ [FCM NOTIFICATION] Firebase Admin SDK is initialized`);
 
       // Get active FCM tokens for the user
       console.log(`🔍 Retrieving FCM tokens for user: ${userUid}`);

@@ -159,6 +159,11 @@ router.post('/fcm/tokens', verifyFirebaseIdToken, async (req, res) => {
       updated_at: new Date().toISOString(),
     };
 
+    console.log(`📱 [FCM TOKEN REGISTRATION] Registering FCM token for user: ${req.user.firebaseUid}`);
+    console.log(`   Device ID: ${tokenData.device_id}`);
+    console.log(`   Device Type: ${tokenData.device_type}`);
+    console.log(`   Token prefix: ${tokenData.fcm_token.substring(0, 20)}...`);
+
     const { data, error } = await supabase
       .from('user_fcm_tokens')
       .upsert(tokenData, { 
@@ -168,12 +173,15 @@ router.post('/fcm/tokens', verifyFirebaseIdToken, async (req, res) => {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error(`❌ [FCM TOKEN REGISTRATION] Database error:`, error);
+      throw error;
+    }
 
-    console.log('FCM token registered/updated', {
-      user_uid: tokenData.user_uid,
-      device_id: tokenData.device_id,
-    });
+    console.log(`✅ [FCM TOKEN REGISTRATION] Token registered/updated successfully`);
+    console.log(`   User UID: ${tokenData.user_uid}`);
+    console.log(`   Device ID: ${tokenData.device_id}`);
+    console.log(`   Token ID: ${data?.id || 'N/A'}`);
 
     return res.status(200).json({ ok: true });
   } catch (error) {
